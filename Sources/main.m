@@ -39,6 +39,11 @@ static NSDictionary *CTCurrent(void) {
     if (!source) CTFail(@"macOS did not return an active input source");
     NSDictionary *result = CTDescribe(source); CFRelease(source); return result;
 }
+static NSString *CTCurrentID(void) {
+    TISInputSourceRef source = TISCopyCurrentKeyboardInputSource();
+    if (!source) CTFail(@"macOS did not return an active input source");
+    NSString *sourceID = CTString(source, kTISPropertyInputSourceID); CFRelease(source); return sourceID ?: @"";
+}
 static NSArray<NSDictionary *> *CTAvailable(void) {
     NSArray *all = CFBridgingRelease(TISCreateInputSourceList(NULL, false));
     NSMutableArray *result = [NSMutableArray array];
@@ -128,6 +133,7 @@ typedef void (^CTReply)(NSDictionary *);
 @interface CTJob : NSObject
 @property NSDictionary *request;
 @property (copy) CTReply reply;
+@property NSTimeInterval received;
 @end
 @implementation CTJob
 @end
@@ -140,6 +146,10 @@ typedef void (^CTReply)(NSDictionary *);
 @property BOOL processing;
 @property int serverFD;
 @property int lockFD;
+@property NSArray<NSDictionary *> *group;
+@property NSDictionary<NSString *, id> *sourceRefs;
+@property NSDictionary *cachedConfig;
+@property NSDate *configStamp;
 - (void)handle:(NSDictionary *)request reply:(CTReply)reply;
 @end
 
@@ -156,6 +166,10 @@ typedef void (^CTReply)(NSDictionary *);
     config.target = self; self.statusItem.menu = menu; [self updateIndicator];
     [NSDistributedNotificationCenter.defaultCenter addObserver:self selector:@selector(sourceChanged:)
         name:(__bridge NSString *)kTISNotifySelectedKeyboardInputSourceChanged object:nil];
+    [NSDistributedNotificationCenter.defaultCenter addObserver:self selector:@selector(enabledSourcesChanged:)
+        name:(__bridge NSString *)kTISNotifyEnabledKeyboardInputSourcesChanged object:nil];
+    // Warm the source cache so the first tap after login switches at once.
+    @try { [self toggleGroup]; } @catch (NSException *error) { (void)error; }
     @try { [self startServer]; }
     @catch (NSException *error) { fprintf(stderr, "%s\n", error.reason.UTF8String); exit(1); }
 }
@@ -220,6 +234,7 @@ typedef void (^CTReply)(NSDictionary *);
     if (![@[@"toggle", @"set"] containsObject:command ?: @""]) { reply(CTError(@"Unknown command")); return; }
     if (self.queue.count >= 16) { reply(CTError(@"Too many pending switches")); return; }
     CTJob *job = [CTJob new]; job.request = request; job.reply = reply;
+    job.received = NSProcessInfo.processInfo.systemUptime;
     [self.queue addObject:job]; [self drain];
 }
 - (void)drain {
@@ -227,21 +242,24 @@ typedef void (^CTReply)(NSDictionary *);
     self.processing = YES;
     CTJob *job = self.queue.firstObject; [self.queue removeObjectAtIndex:0];
     NSTimeInterval started = NSProcessInfo.processInfo.systemUptime;
+    __block NSTimeInterval selected = 0;
     CTReply completion = ^(NSDictionary *response) {
         NSMutableDictionary *result = [response mutableCopy];
         result[@"elapsedMilliseconds"] = @((int)((NSProcessInfo.processInfo.systemUptime - started) * 1000));
+        if (selected > 0) result[@"selectedAfterMilliseconds"] = @((int)((selected - job.received) * 1000));
         job.reply(result); self.processing = NO; [self updateIndicator]; [self drain];
     };
     @try {
         // Never switch or borrow focus while a secure keyboard-input guard is active.
         if (IsSecureEventInputEnabled()) CTFail(@"Secure keyboard input is active; switch skipped");
-        NSDictionary *config = CTConfig(), *target = nil;
-        NSArray *available = CTAvailable();
+        // A tap switches from cached source handles: listing every source first cost 70-2000 ms.
+        NSDictionary *config = [self configuration], *target = nil;
         if ([job.request[@"command"] isEqual:@"set"]) {
-            for (NSDictionary *source in available) if ([source[@"id"] isEqual:job.request[@"sourceID"]]) { target = source; break; }
+            for (NSDictionary *source in CTAvailable()) if ([source[@"id"] isEqual:job.request[@"sourceID"]]) { target = source; break; }
             if (!target) CTFail(@"Requested input source is not enabled");
-        } else target = CTNextSource(CTCurrent()[@"id"], CTSourceGroup(available, config));
-        CTSelect(target[@"id"]);
+        } else target = CTNextSource(CTCurrentID(), [self toggleGroup]);
+        [self select:target];
+        selected = NSProcessInfo.processInfo.systemUptime;
         if (CTNeedsRefresh(target)) {
             [self refreshForMilliseconds:[config[@"refreshMilliseconds"] integerValue] completion:^{
                 [self verify:target retry:YES refreshed:YES completion:completion];
@@ -253,6 +271,34 @@ typedef void (^CTReply)(NSDictionary *);
         }
     } @catch (NSException *error) { completion(CTError(error.reason)); }
 }
+- (NSDictionary *)configuration {
+    NSDate *stamp = [NSFileManager.defaultManager attributesOfItemAtPath:CTConfigPath() error:nil].fileModificationDate ?: NSDate.distantPast;
+    if (!self.cachedConfig || ![stamp isEqual:self.configStamp]) {
+        self.cachedConfig = CTConfig(); self.configStamp = stamp; self.group = nil;
+    }
+    return self.cachedConfig;
+}
+- (NSArray<NSDictionary *> *)toggleGroup {
+    NSDictionary *config = [self configuration];
+    if (!self.group) {
+        NSMutableDictionary *refs = [NSMutableDictionary dictionary];
+        for (id value in CFBridgingRelease(TISCreateInputSourceList(NULL, false))) {
+            NSString *sourceID = CTString((__bridge TISInputSourceRef)value, kTISPropertyInputSourceID);
+            if (sourceID) refs[sourceID] = value;
+        }
+        self.group = CTSourceGroup(CTAvailable(), config); self.sourceRefs = refs;
+    }
+    return self.group;
+}
+- (void)select:(NSDictionary *)target {
+    id source = self.sourceRefs[target[@"id"]];
+    if (source) {
+        if (TISSelectInputSource((__bridge TISInputSourceRef)source) == noErr) return;
+        self.group = nil; self.sourceRefs = nil;
+    }
+    CTSelect(target[@"id"]);
+}
+- (void)enabledSourcesChanged:(NSNotification *)notification { (void)notification; self.group = nil; self.sourceRefs = nil; }
 - (void)verify:(NSDictionary *)target retry:(BOOL)retry refreshed:(BOOL)refreshed completion:(CTReply)completion {
     @try {
         NSDictionary *current = CTCurrent();
@@ -263,7 +309,7 @@ typedef void (^CTReply)(NSDictionary *);
             completion(@{@"ok": @NO, @"message": @"macOS did not keep the requested source",
                 @"currentSource": current, @"refreshApplied": @(refreshed)}); return;
         }
-        CTSelect(target[@"id"]);
+        [self select:target];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
             [self verify:target retry:NO refreshed:refreshed completion:completion];
         });

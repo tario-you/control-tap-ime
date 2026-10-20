@@ -14,13 +14,15 @@ continues typing with the previous input method.
 - Control plus another key, a mouse click, or scrolling: normal Control behavior;
   Karabiner cancels the standalone-tap action.
 - Hold Control longer than 250 ms: normal Control, with no language switch.
-- English selection does not borrow focus. CJK selection briefly focuses a tiny,
-  almost transparent input window, then returns to the previous application.
+- A tap sends macOS's own "Select the previous input source" shortcut
+  (Control–Space, which must stay enabled in Keyboard Shortcuts › Input Sources).
+  macOS switches in about 25–55 ms and applies it to the focused field itself, so
+  no focus is borrowed and you can type at once.
 - A small `EN` / `中` menu-bar indicator shows the active source. Its menu can also switch languages.
-- Switches are serialized so quick taps are processed in order.
 
-The helper stays running. Karabiner sends a local command on release, so each tap
-avoids launching a new GUI app or sending the system Control–Space shortcut.
+The helper's own `toggle` and `set` commands, and its menu, select through TIS with
+the CJK focus refresh below. They measured 180–390 ms to a Chinese source, with
+spikes to 1.8 s, which is why taps no longer use them.
 
 ## Install
 

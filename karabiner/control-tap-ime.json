@@ -1,5 +1,5 @@
 {
-  "title": "ControlTapIME — Control tap language switch with CJK focus refresh",
+  "title": "ControlTapIME — Control tap language switch through the system Control-Space shortcut",
   "rules": [
     {
       "description": "ControlTapIME: tap Control to switch language; hold/chords remain Control",
@@ -8,7 +8,7 @@
           "type": "basic",
           "from": { "key_code": "left_control", "modifiers": { "optional": ["caps_lock"] } },
           "to": [{ "key_code": "left_control" }],
-          "to_if_alone": [{ "shell_command": "\"$HOME/Applications/ControlTapIME.app/Contents/MacOS/controltap-ime\" toggle >/dev/null" }],
+          "to_if_alone": [{ "key_code": "spacebar", "modifiers": ["left_control"] }],
           "parameters": { "basic.to_if_alone_timeout_milliseconds": 250 },
           "conditions": [{ "type": "variable_unless", "name": "caps_hyper_down", "value": 1 }]
         },
@@ -16,7 +16,7 @@
           "type": "basic",
           "from": { "key_code": "right_control", "modifiers": { "optional": ["caps_lock"] } },
           "to": [{ "key_code": "right_control" }],
-          "to_if_alone": [{ "shell_command": "\"$HOME/Applications/ControlTapIME.app/Contents/MacOS/controltap-ime\" toggle >/dev/null" }],
+          "to_if_alone": [{ "key_code": "spacebar", "modifiers": ["left_control"] }],
           "parameters": { "basic.to_if_alone_timeout_milliseconds": 250 },
           "conditions": [{ "type": "variable_unless", "name": "caps_hyper_down", "value": 1 }]
         }
