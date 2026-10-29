@@ -22,6 +22,9 @@ continues typing with the previous input method.
 The helper stays running. Karabiner sends a local command on release, so each tap
 avoids launching a new GUI app or sending the system Control–Space shortcut.
 
+Taps stay on this helper. Control–Space was tried on 10-20 and was faster but
+missed switches in real use, so it was taken back out on 10-29.
+
 ## Install
 
 Requires macOS 13+, Karabiner-Elements, Python 3, and existing Apple command-line
