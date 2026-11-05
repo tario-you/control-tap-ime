@@ -41,6 +41,9 @@ int main(void) {
         check([CTValidateConfiguration(@{})[@"refreshMilliseconds"] isEqual:@80], @"Default interval is 80 ms");
         check([CTIndicatorTitle(@"EN", NO) isEqual:@"EN"], @"No hold keeps the label");
         check([CTIndicatorTitle(@"EN", YES) isEqual:@"EN 🔒"], @"A hold shows a lock");
+        check(!CTSecureInputBlocks(NO, NO), @"No hold never blocks");
+        check(!CTSecureInputBlocks(YES, YES), @"A hold under a regular app does not stop the tap");
+        check(CTSecureInputBlocks(YES, NO), @"A system prompt in front blocks");
         printf("PASS: %u core checks\n", checks);
     }
     return 0;

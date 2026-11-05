@@ -91,7 +91,7 @@ every third-party IME's internal mode. Verification checks TIS selection, not th
 characters you type. Focus briefly moves; a menu-bar flash is possible. Wait for
 the indicator before typing immediately after a switch. If an IME is slow to
 activate, increase `refreshMilliseconds` to 150; the accepted range is 20–500 ms.
-Secure keyboard input causes a switch to be skipped. No guard is disabled. A skipped tap shows a lock beside the menu-bar label until a later tap finds the hold gone; the process number macOS reports for the hold follows the front app, so it cannot name the holder.
+A switch is skipped only while a system prompt, such as a login or admin password dialog, holds secure keyboard input, and a lock shows beside the menu-bar label. Any other hold is ignored: any app can leave secure input on system-wide, and the process number macOS reports for it follows the front app, so it cannot name the holder. Tapping Control while typing in a password box can lose the keys typed in that moment.
 
 The temporary-focus approach was inspired by
 [macism](https://github.com/laishulu/macism) and the temporary-input-window mode in

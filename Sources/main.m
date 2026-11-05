@@ -17,6 +17,10 @@ static NSDictionary *CTConfig(void) {
     if (!data && [[NSFileManager defaultManager] fileExistsAtPath:CTConfigPath()]) CTFail(@"Could not read configuration");
     return CTValidateConfiguration(data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : @{});
 }
+static BOOL CTSecureInputActive(void) {
+    NSRunningApplication *front = NSWorkspace.sharedWorkspace.frontmostApplication;
+    return CTSecureInputBlocks(IsSecureEventInputEnabled(), front && front.activationPolicy == NSApplicationActivationPolicyRegular);
+}
 static NSDictionary *CTError(NSString *message) { return @{@"ok": @NO, @"message": message ?: @"Unknown error"}; }
 static NSString *CTString(TISInputSourceRef source, CFStringRef key) {
     void *value = TISGetInputSourceProperty(source, key);
@@ -233,8 +237,8 @@ typedef void (^CTReply)(NSDictionary *);
         job.reply(result); self.processing = NO; [self updateIndicator]; [self drain];
     };
     @try {
-        // Never switch or borrow focus while a secure keyboard-input guard is active.
-        if (IsSecureEventInputEnabled()) CTFail(@"Secure keyboard input is active; switch skipped");
+        // Never switch or borrow focus while a system password prompt is in front.
+        if (CTSecureInputActive()) CTFail(@"A system prompt holds secure keyboard input; switch skipped");
         NSDictionary *config = CTConfig(), *target = nil;
         NSArray *available = CTAvailable();
         if ([job.request[@"command"] isEqual:@"set"]) {
@@ -259,7 +263,7 @@ typedef void (^CTReply)(NSDictionary *);
         if ([current[@"id"] isEqual:target[@"id"]]) {
             completion(@{@"ok": @YES, @"message": @"switched", @"currentSource": current, @"refreshApplied": @(refreshed)}); return;
         }
-        if (!retry || IsSecureEventInputEnabled()) {
+        if (!retry || CTSecureInputActive()) {
             completion(@{@"ok": @NO, @"message": @"macOS did not keep the requested source",
                 @"currentSource": current, @"refreshApplied": @(refreshed)}); return;
         }
@@ -271,7 +275,7 @@ typedef void (^CTReply)(NSDictionary *);
 }
 - (void)refreshForMilliseconds:(NSInteger)milliseconds completion:(dispatch_block_t)completion {
     NSScreen *screen = NSScreen.mainScreen ?: NSScreen.screens.firstObject;
-    if (!screen || IsSecureEventInputEnabled()) { completion(); return; }
+    if (!screen || CTSecureInputActive()) { completion(); return; }
     self.previousApplication = NSWorkspace.sharedWorkspace.frontmostApplication;
     NSRect frame = NSMakeRect(NSMinX(screen.visibleFrame) + 8, NSMinY(screen.visibleFrame) + 8, 3, 3);
     CTRefreshWindow *window = [[CTRefreshWindow alloc] initWithContentRect:frame
@@ -299,9 +303,9 @@ typedef void (^CTReply)(NSDictionary *);
     NSDictionary *source = CTCurrent(); NSString *title = @"IM";
     if ([source[@"id"] hasPrefix:@"com.apple.keylayout."]) title = @"EN";
     for (NSString *language in source[@"languages"]) if ([language hasPrefix:@"zh"]) title = @"中";
-    BOOL secure = IsSecureEventInputEnabled();
+    BOOL secure = CTSecureInputActive();
     self.statusItem.button.title = CTIndicatorTitle(title, secure);
-    self.statusItem.button.toolTip = [@"ControlTapIME · " stringByAppendingString:secure ? @"Secure keyboard input is on; taps are skipped" : source[@"name"]];
+    self.statusItem.button.toolTip = [@"ControlTapIME · " stringByAppendingString:secure ? @"A system prompt holds secure keyboard input; taps are skipped" : source[@"name"]];
 }
 - (void)toggleFromMenu:(id)sender { (void)sender; [self handle:@{@"command": @"toggle"} reply:^(NSDictionary *response) { (void)response; }]; }
 - (void)openConfiguration:(id)sender { (void)sender; [NSWorkspace.sharedWorkspace openURL:[NSURL fileURLWithPath:CTConfigPath()]]; }
