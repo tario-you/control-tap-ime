@@ -149,7 +149,7 @@ def main():
     args = parser.parse_args()
     home = Path.home()
     support = home / "Library/Application Support/ControlTapIME"
-    app = home / "Applications/ControlTapIME.app"
+    app = Path("/Applications/ControlTapIME.app")
     binary = app / "Contents/MacOS/controltap-ime"
     agent = home / "Library/LaunchAgents" / (LABEL + ".plist")
     target = home / ".config/karabiner/karabiner.json"

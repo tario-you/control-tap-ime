@@ -39,6 +39,8 @@ int main(void) {
         check(!CTNeedsRefresh(english), @"English avoids focus refresh");
         check(!CTNeedsRefresh(@{@"languages": @[@"ru"]}), @"Russian avoids unnecessary focus refresh");
         check([CTValidateConfiguration(@{})[@"refreshMilliseconds"] isEqual:@80], @"Default interval is 80 ms");
+        check([CTIndicatorTitle(@"EN", NO) isEqual:@"EN"], @"No hold keeps the label");
+        check([CTIndicatorTitle(@"EN", YES) isEqual:@"EN 🔒"], @"A hold shows a lock");
         printf("PASS: %u core checks\n", checks);
     }
     return 0;

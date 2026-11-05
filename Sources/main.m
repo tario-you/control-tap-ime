@@ -299,8 +299,9 @@ typedef void (^CTReply)(NSDictionary *);
     NSDictionary *source = CTCurrent(); NSString *title = @"IM";
     if ([source[@"id"] hasPrefix:@"com.apple.keylayout."]) title = @"EN";
     for (NSString *language in source[@"languages"]) if ([language hasPrefix:@"zh"]) title = @"中";
-    self.statusItem.button.title = title;
-    self.statusItem.button.toolTip = [@"ControlTapIME · " stringByAppendingString:source[@"name"]];
+    BOOL secure = IsSecureEventInputEnabled();
+    self.statusItem.button.title = CTIndicatorTitle(title, secure);
+    self.statusItem.button.toolTip = [@"ControlTapIME · " stringByAppendingString:secure ? @"Secure keyboard input is on; taps are skipped" : source[@"name"]];
 }
 - (void)toggleFromMenu:(id)sender { (void)sender; [self handle:@{@"command": @"toggle"} reply:^(NSDictionary *response) { (void)response; }]; }
 - (void)openConfiguration:(id)sender { (void)sender; [NSWorkspace.sharedWorkspace openURL:[NSURL fileURLWithPath:CTConfigPath()]]; }

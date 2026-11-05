@@ -40,7 +40,7 @@ python3 scripts/install.py
 
 The installer adds **one rule** to the selected Karabiner profile, preserves the
 rest of its JSON, and keeps a private backup. It installs the helper into
-`~/Applications/ControlTapIME.app` and a login LaunchAgent. The app uses Karabiner's
+`/Applications/ControlTapIME.app` and a login LaunchAgent. The app uses Karabiner's
 existing input permissions; it has no global keyboard listener of its own and
 does not request Accessibility or Input Monitoring access.
 
@@ -73,7 +73,7 @@ An empty `sourceIDs` array enables automatic mode. Configuration is reread on
 each switch. To discover enabled IDs:
 
 ```sh
-"$HOME/Applications/ControlTapIME.app/Contents/MacOS/controltap-ime" list
+"/Applications/ControlTapIME.app/Contents/MacOS/controltap-ime" list
 ```
 
 ## How the Chinese fix works
@@ -91,7 +91,7 @@ every third-party IME's internal mode. Verification checks TIS selection, not th
 characters you type. Focus briefly moves; a menu-bar flash is possible. Wait for
 the indicator before typing immediately after a switch. If an IME is slow to
 activate, increase `refreshMilliseconds` to 150; the accepted range is 20–500 ms.
-Secure keyboard input causes a switch to be skipped. No guard is disabled.
+Secure keyboard input causes a switch to be skipped. No guard is disabled. A skipped tap shows a lock beside the menu-bar label until a later tap finds the hold gone; the process number macOS reports for the hold follows the front app, so it cannot name the holder.
 
 The temporary-focus approach was inspired by
 [macism](https://github.com/laishulu/macism) and the temporary-input-window mode in
