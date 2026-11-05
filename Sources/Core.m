@@ -57,3 +57,7 @@ NSDictionary *CTNextSource(NSString *currentID, NSArray<NSDictionary *> *group) 
     for (NSUInteger i = 0; i < group.count; i++) if ([group[i][@"id"] isEqual:currentID]) return group[(i + 1) % group.count];
     return group[0];
 }
+// Taps are skipped while secure input is on, from any app; the menu bar is the only place that can say so.
+NSString *CTIndicatorTitle(NSString *title, BOOL secureInput) {
+    return secureInput ? [title stringByAppendingString:@" 🔒"] : title;
+}

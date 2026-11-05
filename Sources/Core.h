@@ -4,3 +4,4 @@ BOOL CTNeedsRefresh(NSDictionary *source);
 NSDictionary *CTValidateConfiguration(NSDictionary *configuration);
 NSArray<NSDictionary *> *CTSourceGroup(NSArray<NSDictionary *> *available, NSDictionary *configuration);
 NSDictionary *CTNextSource(NSString *currentID, NSArray<NSDictionary *> *group);
+NSString *CTIndicatorTitle(NSString *title, BOOL secureInput);
