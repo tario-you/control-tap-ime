@@ -61,3 +61,7 @@ NSDictionary *CTNextSource(NSString *currentID, NSArray<NSDictionary *> *group) 
 NSString *CTIndicatorTitle(NSString *title, BOOL secureInput) {
     return secureInput ? [title stringByAppendingString:@" 🔒"] : title;
 }
+// Any process can leave secure input on system-wide, and macOS will not say which, so only a system prompt in front blocks a switch.
+BOOL CTSecureInputBlocks(BOOL secureInput, BOOL frontIsRegularApp) {
+    return secureInput && !frontIsRegularApp;
+}
