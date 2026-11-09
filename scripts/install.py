@@ -16,6 +16,7 @@ import time
 
 ROOT = Path(__file__).resolve().parent.parent
 LABEL = "io.github.tario-you.controltap-ime"
+WATCHDOG_LABEL = LABEL + ".watchdog"
 DESCRIPTION = "ControlTapIME: tap Control to switch language; hold/chords remain Control"
 DECODER = json.JSONDecoder()
 
@@ -152,6 +153,8 @@ def main():
     app = Path("/Applications/ControlTapIME.app")
     binary = app / "Contents/MacOS/controltap-ime"
     agent = home / "Library/LaunchAgents" / (LABEL + ".plist")
+    watchdog_agent = home / "Library/LaunchAgents" / (WATCHDOG_LABEL + ".plist")
+    watchdog = support / "watchdog.sh"
     target = home / ".config/karabiner/karabiner.json"
     asset = home / ".config/karabiner/assets/complex_modifications/control-tap-ime.json"
     domain = f"gui/{os.getuid()}"
@@ -176,7 +179,10 @@ def main():
     if patched != original:
         atomic_write(backups / ("karabiner-" + stamp + ".json"), original)
     if args.uninstall:
+        subprocess.run(["launchctl", "bootout", domain + "/" + WATCHDOG_LABEL], capture_output=True)
         subprocess.run(["launchctl", "bootout", domain + "/" + LABEL], capture_output=True)
+        if watchdog_agent.exists():
+            watchdog_agent.unlink()
         atomic_write(target, patched, target.stat().st_mode & 0o777, expected=original)
         if agent.exists():
             agent.unlink()
@@ -204,7 +210,7 @@ def main():
     subprocess.run(["launchctl", "bootout", domain + "/" + LABEL], capture_output=True)
     run("launchctl", "bootstrap", domain, str(agent))
     ready = False
-    for _ in range(30):
+    for _ in range(150):
         result = subprocess.run([str(binary), "status"], capture_output=True, text=True)
         if result.returncode == 0:
             ready = True
@@ -212,6 +218,12 @@ def main():
         time.sleep(0.1)
     if not ready:
         raise RuntimeError("Helper did not become ready; Karabiner has not been changed. See local error.log")
+    # A separate job checks every 30 s that the helper answers and restarts it if not.
+    atomic_write(watchdog, (ROOT / "scripts/watchdog.sh").read_bytes(), mode=0o700)
+    atomic_write(watchdog_agent, plistlib.dumps({"Label": WATCHDOG_LABEL, "ProgramArguments": ["/bin/bash", str(watchdog)],
+                                                 "RunAtLoad": True, "StartInterval": 30, "LowPriorityIO": True}))
+    subprocess.run(["launchctl", "bootout", domain + "/" + WATCHDOG_LABEL], capture_output=True)
+    run("launchctl", "bootstrap", domain, str(watchdog_agent))
     atomic_write(asset, (ROOT / "karabiner/control-tap-ime.json").read_bytes())
     atomic_write(target, patched, target.stat().st_mode & 0o777, expected=original)
     print("Installed ControlTapIME. Tap either Control within 250 ms to switch languages.")
