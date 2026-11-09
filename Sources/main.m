@@ -10,7 +10,9 @@
 
 static NSString *const CTVersion = @"1.0.0";
 static NSString *CTSupport(void) { return [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/ControlTapIME"]; }
-static NSString *CTSocket(void) { return [NSString stringWithFormat:@"/tmp/controltap-ime-%u.sock", getuid()]; }
+// The socket lives in the private support directory: macOS tmp_cleaner sweeps /tmp and once deleted
+// the old socket there, leaving the helper alive but unreachable, so every Control tap failed.
+static NSString *CTSocket(void) { return [CTSupport() stringByAppendingPathComponent:@"server.sock"]; }
 static NSString *CTConfigPath(void) { return [CTSupport() stringByAppendingPathComponent:@"config.json"]; }
 static NSDictionary *CTConfig(void) {
     NSData *data = [NSData dataWithContentsOfFile:CTConfigPath()];
@@ -186,6 +188,15 @@ typedef void (^CTReply)(NSDictionary *);
     int result = bind(self.serverFD, (struct sockaddr *)&address, sizeof(address)); umask(mask);
     if (result != 0 || chmod(CTSocket().fileSystemRepresentation, 0600) != 0 || listen(self.serverFD, 16) != 0)
         CTFail(@"Could not bind private socket");
+    struct stat bound; lstat(CTSocket().fileSystemRepresentation, &bound);
+    dev_t device = bound.st_dev; ino_t inode = bound.st_ino;
+    // If anything removes or replaces the socket file, exit so launchd's KeepAlive starts a reachable server.
+    [NSTimer scheduledTimerWithTimeInterval:5 repeats:YES block:^(NSTimer *timer) {
+        (void)timer; struct stat now;
+        if (lstat(CTSocket().fileSystemRepresentation, &now) != 0 || now.st_dev != device || now.st_ino != inode) {
+            fprintf(stderr, "Socket path lost; exiting for launchd restart\n"); exit(1);
+        }
+    }];
     int serverFD = self.serverFD;
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
         while (YES) {
